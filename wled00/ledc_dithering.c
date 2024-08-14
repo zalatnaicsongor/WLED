@@ -32,8 +32,8 @@ uint32_t ledcWithDitheringSetup(uint8_t chan, uint32_t freq, uint8_t bit_num)
     ledc_timer_config_t ledc_timer = {
         .speed_mode       = group,
         .timer_num        = timer,
-        .duty_resolution  = 8,
-        .freq_hz          = 4000,
+        .duty_resolution  = bit_num,
+        .freq_hz          = freq,
         .clk_cfg          = LEDC_DEFAULT_CLK
     };
     if(ledc_timer_config(&ledc_timer) != ESP_OK)
