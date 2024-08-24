@@ -8,6 +8,7 @@
 #include "pin_manager.h"
 #include "bus_wrapper.h"
 #include "bus_manager.h"
+#include "ledc_dithering.h"
 
 extern bool cctICused;
 
@@ -408,9 +409,10 @@ BusPwm::BusPwm(BusConfig &bc)
 {
   if (!IS_PWM(bc.type)) return;
   unsigned numPins = NUM_PWM_PINS(bc.type);
-  _frequency = bc.frequency ? bc.frequency : WLED_PWM_FREQ;
+  _frequency = 2000;
   // duty cycle resolution (_depth) can be extracted from this formula: CLOCK_FREQUENCY > _frequency * 2^_depth
-  for (_depth = MAX_BIT_WIDTH; _depth > 8; _depth--) if (((CLOCK_FREQUENCY/_frequency) >> _depth) > 0) break;
+  //for (_depth = MAX_BIT_WIDTH; _depth > 8; _depth--) if (((CLOCK_FREQUENCY/_frequency) >> _depth) > 0) break;
+  _depth = 8;
 
 #ifdef ESP8266
   analogWriteRange((1<<_depth)-1);
@@ -431,7 +433,7 @@ BusPwm::BusPwm(BusConfig &bc)
     #ifdef ESP8266
     pinMode(_pins[i], OUTPUT);
     #else
-    ledcSetup(_ledcStart + i, _frequency, _depth);
+    ledcWithDitheringSetup(_ledcStart + i, _frequency, _depth);
     ledcAttachPin(_pins[i], _ledcStart + i);
     #endif
   }
@@ -531,11 +533,12 @@ static const uint16_t cieLUT[256] = {
 void BusPwm::show() {
   if (!_valid) return;
   unsigned numPins = NUM_PWM_PINS(_type);
-  unsigned maxBri = (1<<_depth) - 1;
+  unsigned maxBri = (1<<12) - 1;
   #ifdef ESP8266
   unsigned pwmBri = (unsigned)(roundf(powf((float)_bri / 255.0f, 1.7f) * (float)maxBri)); // using gamma 1.7 to extrapolate PWM duty cycle
   #else
-  unsigned pwmBri = cieLUT[_bri] >> (12 - _depth); // use CIE LUT
+  // always 12 bits, 8 bit + 4 bit dithering hardcoded
+  unsigned pwmBri = cieLUT[_bri]; // use CIE LUT
   #endif
   for (unsigned i = 0; i < numPins; i++) {
     unsigned scaled = (_data[i] * pwmBri) / 255;
@@ -543,7 +546,7 @@ void BusPwm::show() {
     #ifdef ESP8266
     analogWrite(_pins[i], scaled);
     #else
-    ledcWrite(_ledcStart + i, scaled);
+    ledcWithDitheringWrite(_ledcStart + i, scaled);
     #endif
   }
 }
